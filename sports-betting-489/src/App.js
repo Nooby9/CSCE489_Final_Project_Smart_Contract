@@ -1,66 +1,73 @@
-import logo from './logo.svg';
-import './App.css';
-
 import React, { useState, useEffect } from 'react';
 import Web3 from 'web3';
-import contract from '@truffle/contract';
-import bettingApp from './/abi/bettingApp.json';
-const MyContract = contract(MyContractJSON);
+import logo from './logo.svg';
+import './App.css';
+import bettingApp from './abi/bettingApp.json';
 
+const web3 = new Web3(Web3.givenProvider || 'http://localhost:7545');
+const contractAddress = "0x1336CF0136778bc30c874D3875a68b3951B15925";
 
-// Call the function to initialize Web3 and set the provider
-//initWeb3();
+let contract;
 
+if (typeof web3 !== 'undefined') {
+  contract = new web3.eth.Contract(bettingApp.abi, contractAddress);
+} else {
+  alert("Please install MetaMask or another web3 provider to interact with this app.");
+}
 
 function App() {
-  const [web3, setWeb3] = useState(undefined);
-  const [myContract, setMyContract] = useState(undefined);
-  const [accounts, setAccounts] = useState([]);
-  const [betAmount, setBetAmount] = useState('');
-  const [teamSelected, setTeamSelected] = useState('');
+  const [teamNumber, setTeamNumber] = useState('');
+  const [ethAmount, setEthAmount] = useState('');
 
-  useEffect(() => {
-    const init = async () => {
-      const web3 = new Web3(Web3.givenProvider || 'http://localhost:8545');
-      const accounts = await web3.eth.getAccounts();
-      const myContract = contract(MyContractJSON);
-      myContract.setProvider(web3.currentProvider);
-      setWeb3(web3);
-      setAccounts(accounts);
-      setMyContract(myContract);
-    };
-    init();
-  }, []);
+  const placeBet = async (team) => {
+    if (!contract) {
+      alert("Please connect to MetaMask and make sure the contract is loaded.");
+      return;
+    }
 
-  const handleBet = async () => {
-    if (web3 && myContract && accounts && teamSelected) {
-      const instance = await myContract.deployed();
-      const weiValue = web3.utils.toWei(betAmount, 'ether');
-      await instance.bet(teamSelected, { from: accounts[0], value: weiValue });
+    const betAmount = Web3.utils.toWei(ethAmount, "ether");
+    const accounts = await web3.eth.getAccounts();
+
+    try {
+      await contract.methods.commitBet(team).send({ from: accounts[0], value: betAmount });
+      alert("Bet placed successfully!");
+    } catch (error) {
+      console.error("Error placing bet:", error);
+      alert("Error placing bet. Check the console for more details.");
     }
   };
 
   return (
     <div className="App">
       <header className="App-header">
-        <h1>Betting App</h1>
+        <img src={logo} className="App-logo" alt="logo" />
         <div>
-          <input
-            type="number"
-            placeholder="Bet amount (in Ether)"
-            value={betAmount}
-            onChange={(e) => setBetAmount(e.target.value)}
-          />
-          <select
-            value={teamSelected}
-            onChange={(e) => setTeamSelected(e.target.value)}
-          >
-            <option value="">Select Team</option>
-            <option value="1">Team 1</option>
-            <option value="2">Team 2</option>
-          </select>
-          <button onClick={handleBet}>Place Bet</button>
+          <label>
+            Team number:
+            <input
+              type="string"
+              value={teamNumber}
+              onChange={(e) => setTeamNumber(e.target.value)}
+            />
+          </label>
+          <label>
+            Amount (ETH):
+            <input
+              type="text"
+              value={ethAmount}
+              onChange={(e) => setEthAmount(e.target.value)}
+            />
+          </label>
+          <button onClick={() => placeBet(teamNumber)}>Place Bet</button>
         </div>
+        <a
+          className="App-link"
+          href="https://reactjs.org"
+          target="_blank"
+          rel="noopener noreferrer"
+        >
+          Learn React
+        </a>
       </header>
     </div>
   );
