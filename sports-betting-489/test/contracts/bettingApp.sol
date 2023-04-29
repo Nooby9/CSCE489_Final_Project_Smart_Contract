@@ -105,8 +105,14 @@ contract bettingApp {
 
     // Generates a number between 1 and 10 that will be the winner
     function distributePrizes(uint16 teamWinner) public {
+        
         require(msg.sender == owner, "Only owner can distribute prizes");
         require(teamWinner == 1 || teamWinner == 2, "Please enter 1 or 2 for the two teams");
+        for (uint256 i = 0; i < players.length; i++) {
+            address payable playerAddress = payable(players[i]);
+            bool reveal = playerInfo[playerAddress].revealed;
+            require(reveal, "Not all players have revealed.");
+        }
         emit PrizesDistributed(teamWinner);
         //If no one bet on the winning team, return everyone's bets
         if((totalBetsOne==0 && teamWinner==1) || (totalBetsTwo==0 && teamWinner==2)){ 
@@ -158,8 +164,15 @@ contract bettingApp {
             if(winners[j] != address(0)){
                 address payable add = payable(winners[j]);
                 uint256 playerbet = playerInfo[add].amountBet;
-                //Transfer the money to the user, uses safemath to avoid integer overflow or underflow
-                add.transfer((playerbet * (10000 + (LoserBet * 10000 / WinnerBet))) / 10000);
+                
+                //add.transfer((playerbet * (10000 + (LoserBet * 10000 / WinnerBet))) / 10000); //still has some rounding error
+                //LoserBet * 10000 may be a large value, but it is never larger than uint256's max (115792089237316195423570985008687907853269984665640564039457584007913129639935)
+                //as the number of players is limited to 1000 (max loser is 999) and the max wei is 100000000000000000000
+                //Transfer the money to the user, using safemath to avoid integer overflow doesn't work
+                uint256 intermediateResult = LoserBet.mul(10000).div(WinnerBet).add(10000);
+                uint256 result = playerbet.mul(intermediateResult).div(10000);
+                add.transfer(result);
+                //note to self: without 10000: playbet + playerbet*LoserBet/WinnerBet
                 //add.transfer(playerbet.mul((LoserBet.mul(10000).div(WinnerBet).add(10000)).div(10000))); doesn't produce correct result
             }
         }

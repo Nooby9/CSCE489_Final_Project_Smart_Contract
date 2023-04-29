@@ -5,7 +5,7 @@ import './App.css';
 import bettingApp from './abi/bettingApp.json';
 
 const web3 = new Web3(Web3.givenProvider || 'http://localhost:7545');
-const contractAddress = "0x1336CF0136778bc30c874D3875a68b3951B15925";
+const contractAddress = "0x4b846cCEF5D09d7C3b073b7F689E9A1A874C42eE";
 
 let contract;
 
@@ -16,20 +16,44 @@ if (typeof web3 !== 'undefined') {
 }
 
 function App() {
-  const [teamNumber, setTeamNumber] = useState('');
-  const [ethAmount, setEthAmount] = useState('');
+  const [players, setPlayers] = useState([{ teamNumber: '', ethAmount: '', account: '' }]);
+  const [accounts, setAccounts] = useState([]);
+  const [winningTeam, setWinningTeam] = useState('');
 
-  const placeBet = async (team) => {
+  useEffect(() => {
+    const getAccounts = async () => {
+      if (typeof web3 !== 'undefined') {
+        const allAccounts = await web3.eth.getAccounts();
+        setAccounts(allAccounts);
+      }
+    };
+    getAccounts();
+
+  }, []);
+
+  const addPlayer = () => {
+    setPlayers([...players, { teamNumber: '', ethAmount: '', account: '' }]);
+  };
+
+  const checkBalances = async () => {
+    if (typeof web3 !== 'undefined') {
+      for (const account of accounts) {
+        const balance = await web3.eth.getBalance(account);
+        console.log(`Balance of ${account}: ${web3.utils.fromWei(balance, 'ether')} ETH`);
+      }
+    }
+  };
+
+  const placeBet = async (team, ethAmount, account) => {
     if (!contract) {
       alert("Please connect to MetaMask and make sure the contract is loaded.");
       return;
     }
 
     const betAmount = Web3.utils.toWei(ethAmount, "ether");
-    const accounts = await web3.eth.getAccounts();
 
     try {
-      await contract.methods.commitBet(team).send({ from: accounts[0], value: betAmount });
+      await contract.methods.commitBet(team).send({ from: account, value: betAmount });
       alert("Bet placed successfully!");
     } catch (error) {
       console.error("Error placing bet:", error);
@@ -37,28 +61,126 @@ function App() {
     }
   };
 
+  const distributePrizes = async (winningTeamNumber) => {
+    if (!contract) {
+      alert("Please connect to MetaMask and make sure the contract is loaded.");
+      return;
+    }
+
+    try {
+      await contract.methods.distributePrizes(winningTeamNumber).send({ from: accounts[0] });
+      alert("Prizes distributed successfully!");
+      checkBalances();
+    } catch (error) {
+      console.error("Error distributing prizes:", error);
+      alert("Error distributing prizes. Check the console for more details.");
+    }
+  };
+
+  const revealBet = async (teamNumber, nonce, account) => {
+    if (!contract) {
+      alert("Please connect to MetaMask and make sure the contract is loaded.");
+      return;
+    }
+
+    try {
+      await contract.methods.revealBet(teamNumber, nonce).send({ from: account });
+      alert("Bet revealed successfully!");
+    } catch (error) {
+      console.error("Error revealing bet:", error);
+      alert("Error revealing bet. Check the console for more details.");
+    }
+  };
+
+  
   return (
     <div className="App">
       <header className="App-header">
-        <img src={logo} className="App-logo" alt="logo" />
+        <div className="players-container" style={{ display: 'flex', flexWrap: 'wrap' }}>
+          {players.map((player, index) => (
+            <div key={index} style={{ margin: '0 20px', minWidth: '200px' }}>
+              <h3>Player {index + 1}</h3>
+              <label>
+                Team Number + Nonce Hash:
+                <input
+                  type="string"
+                  value={player.teamNumber}
+                  onChange={(e) => {
+                    const newPlayers = [...players];
+                    newPlayers[index].teamNumber = e.target.value;
+                    setPlayers(newPlayers);
+                  }}
+                />
+              </label>
+              <label>
+                Amount (ETH):
+                <input
+                  type="string"
+                  value={player.ethAmount}
+                  onChange={(e) => {
+                    const newPlayers = [...players];
+                    newPlayers[index].ethAmount = e.target.value;
+                    setPlayers(newPlayers);
+                  }}
+                />
+              </label>
+              <label>
+              Nonce:
+              <input
+                type="number"
+                value={player.nonce}
+                onChange={(e) =>
+                  setPlayers(
+                    players.map((p, i) =>
+                      i === index ? { ...p, nonce: e.target.value } : p
+                    )
+                  )
+                }
+              />
+            </label>
+
+              <label>
+                Account:
+                <select
+                  value={player.account}
+                  onChange={(e) => {
+                    const newPlayers = [...players];
+                    newPlayers[index].account = e.target.value;
+                    setPlayers(newPlayers);
+                  }}
+                >
+                  <option value="">Select account</option>
+                  {accounts.map((account, i) => (
+                    <option key={i} value={account}>
+                      {account}
+                    </option>
+                  ))}
+                </select>
+              </label>
+              <button
+                onClick={() => placeBet(player.teamNumber, player.ethAmount, player.account)}
+              >
+                Place Bet
+              </button>
+              <button
+                onClick={() => revealBet(player.teamNumber, player.nonce, player.account)}
+              >
+                Reveal Bet
+              </button>
+            </div>
+          ))}
+        </div>
+        <button onClick={addPlayer}>Add Player</button>
         <div>
           <label>
-            Team number:
+            Winning team:
             <input
-              type="string"
-              value={teamNumber}
-              onChange={(e) => setTeamNumber(e.target.value)}
+              type="number"
+              value={winningTeam}
+              onChange={(e) => setWinningTeam(e.target.value)}
             />
           </label>
-          <label>
-            Amount (ETH):
-            <input
-              type="text"
-              value={ethAmount}
-              onChange={(e) => setEthAmount(e.target.value)}
-            />
-          </label>
-          <button onClick={() => placeBet(teamNumber)}>Place Bet</button>
+          <button onClick={() => distributePrizes(winningTeam)}>Distribute Prizes</button>
         </div>
         <a
           className="App-link"
