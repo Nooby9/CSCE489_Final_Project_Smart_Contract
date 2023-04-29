@@ -7,10 +7,10 @@ pragma solidity ^0.8.12;
 import "@openzeppelin/contracts/utils/math/SafeMath.sol";
 import "@openzeppelin/contracts/utils/Strings.sol"; //For uint to string conversion
 import "@openzeppelin/contracts/utils/cryptography/ECDSA.sol";
-contract pointSpreadBetting {
+import "@openzeppelin/contracts/access/Ownable.sol";
+contract pointSpreadBetting is Ownable{
     using SafeMath for uint256;
     using ECDSA for bytes32;
-    address public owner;
     uint256 public minimumBet;
     uint256 public maximumBet;
     uint256 public totalBetsOne;
@@ -38,28 +38,24 @@ contract pointSpreadBetting {
     receive() external payable {}
     
     constructor() {
-        owner = msg.sender;
         minimumBet = 100000000000000; //0.0001 ether
         maximumBet = 100000000000000000000; //100 ether
         maxPlayers = 1000;
     }
 
-    function startGame() public{
-        require(msg.sender == owner, "Only owner can start the game.");
+    function startGame() public onlyOwner{
         require(pointSpreadSet, "The point spread has not been set.");
         gameStarted = true;
         gameEnded = false;
     }
 
-    function endGame() public{
-        require(msg.sender == owner, "Only owner can end the game.");
+    function endGame() public onlyOwner{
         require(gameStarted, "The game has not started yet, you cannot end the game.");
         gameStarted = false;
         gameEnded = true;
     }
 
-    function setPointSpread(int16 _pointSpread) public {
-        require(msg.sender == owner, "Only owner can set the point spread.");
+    function setPointSpread(int16 _pointSpread) public onlyOwner{
         require(pointSpreadSet == false, "The point spread has already been set.");
         pointSpread = _pointSpread;
         pointSpreadSet = true;
@@ -70,12 +66,13 @@ contract pointSpreadBetting {
     } 
 
     function commitBet(bytes32 _commit) public payable {
+        require(!gameStarted && !gameEnded, "The game has already started or ended.");
         require(pointSpreadSet == true, "The point spread has not been set yet.");
         require(!checkPlayerExists(msg.sender), "Player already exists.");
         require(players.length < maxPlayers, "Maximum number of players reached.");
         require(msg.value >= minimumBet, string.concat("Bet value must be higher than the minimum bet of ", Strings.toString(minimumBet)));
         require(msg.value <= maximumBet, string.concat("Bet value must be lower than the maximum bet of ", Strings.toString(maximumBet)));
-        require(!gameStarted && !gameEnded, "The game has already started or ended.");
+        
 
         playerInfo[msg.sender].commit = _commit;
         playerInfo[msg.sender].amountBet = msg.value;
@@ -108,8 +105,7 @@ contract pointSpreadBetting {
         emit BetPlaced(msg.sender, playerInfo[msg.sender].amountBet, _teamSelected);
     }
 
-    function kill() public { //not gas safe because of the loop, only use in emergency
-        require(msg.sender == owner, "Only owner can execute this function.");
+    function kill() public onlyOwner{ //not gas safe because of the loop, only use in emergency
         require(gameStarted == false, "You cannot terminate the contract during the game.");
 
         // Refund each player's bet
@@ -128,7 +124,7 @@ contract pointSpreadBetting {
         }
 
         // Destroy the contract and send any remaining balance to the owner
-        selfdestruct(payable(owner));
+        selfdestruct(payable(owner()));
     }
 
     function checkPlayerExists(address player) public view returns(bool){
@@ -140,8 +136,7 @@ contract pointSpreadBetting {
 
 
     //change to do pull over push, set winner to "winner condition"
-    function distributePrizes(int16 teamOne, int16 teamTwo) public { //teamOne is the underdog (+10) and teamTwo is the favorite (-10)
-        require(msg.sender == owner, "Only owner can distribute prizes");
+    function distributePrizes(int16 teamOne, int16 teamTwo) public onlyOwner{ //teamOne is the underdog (+10) and teamTwo is the favorite (-10)
         require(gameEnded && !gameStarted, "The game is still going.");
         uint16 teamWinner = 0;
         if(teamTwo-teamOne > pointSpread){
@@ -205,16 +200,10 @@ contract pointSpreadBetting {
             if(winners[j] != address(0)){
                 address payable add = payable(winners[j]);
                 uint256 playerbet = playerInfo[add].amountBet;
-                
-                //add.transfer((playerbet * (10000 + (LoserBet * 10000 / WinnerBet))) / 10000); //still has some rounding error
-                //LoserBet * 10000 may be a large value, but it is never larger than uint256's max (115792089237316195423570985008687907853269984665640564039457584007913129639935)
-                //as the number of players is limited to 1000 (max loser is 999) and the max wei is 100000000000000000000
-                //Transfer the money to the user, using safemath to avoid integer overflow doesn't work
                 uint256 intermediateResult = LoserBet.mul(10000).div(WinnerBet).add(10000);
                 uint256 result = playerbet.mul(intermediateResult).div(10000);
                 playerInfo[add].winnings = result;
-                //note to self: without 10000: playbet + playerbet*LoserBet/WinnerBet
-                //add.transfer(playerbet.mul((LoserBet.mul(10000).div(WinnerBet).add(10000)).div(10000))); doesn't produce correct result
+                
             }
         }
         
@@ -234,8 +223,7 @@ contract pointSpreadBetting {
         payable(msg.sender).transfer(amount);
     }
 
-    function resetGame() public { //new functionality, different from kill which destroyed the contract
-        require(msg.sender == owner, "Only owner can reset the game.");
+    function resetGame() public onlyOwner{ //new functionality, different from kill which destroyed the contract
         require(gameEnded, "The game has not ended and cannot be reset.");
         for (uint256 i = 0; i < players.length; i++) { //check if winning player has withdrawn their funds
             address playerAddress = players[i];
