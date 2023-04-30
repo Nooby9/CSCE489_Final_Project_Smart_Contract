@@ -8,7 +8,8 @@ import "@openzeppelin/contracts/utils/math/SafeMath.sol";
 import "@openzeppelin/contracts/utils/Strings.sol"; //For uint to string conversion
 import "@openzeppelin/contracts/utils/cryptography/ECDSA.sol";
 import "@openzeppelin/contracts/access/Ownable.sol";
-contract pointSpreadBetting is Ownable{
+import "@openzeppelin/contracts/security/ReentrancyGuard.sol";
+contract pointSpreadBetting is Ownable, ReentrancyGuard{
     using SafeMath for uint256;
     using ECDSA for bytes32;
     uint256 public minimumBet;
@@ -136,7 +137,7 @@ contract pointSpreadBetting is Ownable{
 
 
     //change to do pull over push, set winner to "winner condition"
-    function distributePrizes(int16 teamOne, int16 teamTwo) public onlyOwner{ //teamOne is the underdog (+10) and teamTwo is the favorite (-10)
+    function distributePrizes(int16 teamOne, int16 teamTwo) public onlyOwner nonReentrant{ //teamOne is the underdog (+10) and teamTwo is the favorite (-10)
         require(gameEnded && !gameStarted, "The game is still going.");
         uint16 teamWinner = 0;
         if(teamTwo-teamOne > pointSpread){
@@ -197,6 +198,7 @@ contract pointSpreadBetting is Ownable{
         //We loop through the array of winners, to give ethers to the winners
         for(uint256 j = 0; j < count; j++){
             // Check that the address in this fixed array is not empty
+            // 10000 is for rounding error when distributing odd prizes or to an odd group of people
             if(winners[j] != address(0)){
                 address payable add = payable(winners[j]);
                 uint256 playerbet = playerInfo[add].amountBet;
