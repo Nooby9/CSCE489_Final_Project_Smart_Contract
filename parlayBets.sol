@@ -25,11 +25,11 @@ contract ParlayBets {
     }
 
     function placeBet(uint256 eventId, uint8[] memory outcomes) public payable {
-        require(msg.value > 0, "Must send a positive amount of ETH");
-        require(outcomes.length > 1, "Parlay bet must have at least 2 outcomes");
+        require(msg.value > 0, "You need to send a positive amount of ETH");
+        require(outcomes.length > 1, "Your parlay must have at least 2 outcomes");
 
         Bet storage bet = userBets[eventId][msg.sender];
-        require(bet.amount == 0, "A bet has already been placed for this event by this bettor");
+        require(bet.amount == 0, "You've already betted on this event");
 
         bet.amount = msg.value;
         bet.outcomes = outcomes;
