@@ -63,7 +63,7 @@ contract OverUnderBetting {
         uint256 totalLosingBets = betAmounts[!winningOutcome];
 
         for (uint256 x = 1; x <= _betIds.current(); x++) {
-            Bet storage bet = bets[i];
+            Bet storage bet = bets[x];
             if (bet.over == winningOutcome) {
                 uint256 payout = (bet.amount * totalLosingBets) / totalWinningBets;
                 uint256 totalPayout = bet.amount + payout;
